@@ -81,7 +81,7 @@ class TransparentSqueezeNet(SqueezeNet):
             with the version
         """
         if self.version == 1.0:
-            self._load_state_dict_1_0(self, state_dict)
+            self._load_state_dict_1_0(state_dict)
         else:
             raise NotImplementedError("No support for version 1.1 yet")
 
