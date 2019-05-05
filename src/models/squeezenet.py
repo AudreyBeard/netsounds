@@ -22,7 +22,12 @@ class TransparentSqueezeNet(SqueezeNet):
         on this.
     """
     def __init__(self, version=1.0, num_classes=1000, pretrained=False):
-        super().__init__(version=version, num_classes=num_classes)
+        if version == 1.0:
+            v_str = '1_0'
+        else:
+            raise NotImplementedError("No support for version 1.1 yet")
+
+        super().__init__(version=v_str, num_classes=num_classes)
         self.version = version
 
         # Here we copy the architecture of SqueezeNet, but break it apart to see
@@ -69,12 +74,12 @@ class TransparentSqueezeNet(SqueezeNet):
     def forward_transparent(self, x):
         """ Returns tuple of activations from each module
         """
-        x_1 = self.features(x)
-        x_2 = self.features(x_1)
-        x_3 = self.features(x_2)
-        x_4 = self.features(x_3)
+        x_1 = self.features_1(x)
+        x_2 = self.features_2(x_1)
+        x_3 = self.features_3(x_2)
+        x_4 = self.features_4(x_3)
         out = self.classifier(x_4)
-        return (x_1, x_2, x_3, x_4, out)
+        return (x_1, x_2, x_3, x_4, out.view(out.size(0), self.num_classes))
 
     def load_state_dict(self, state_dict):
         """ Replaces superclass's since the arrangement of the modules makes it
