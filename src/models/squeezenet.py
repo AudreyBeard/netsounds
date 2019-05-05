@@ -3,6 +3,7 @@ from torch import nn
 import torch.utils.model_zoo as model_zoo
 
 # This is where we download the pretrained models from
+# NOTE models are trained on ImageNet
 model_urls = {
     1.0: 'https://download.pytorch.org/models/squeezenet1_0-a815701f.pth',
     1.1: 'https://download.pytorch.org/models/squeezenet1_1-f364aa15.pth',
