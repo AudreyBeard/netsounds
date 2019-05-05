@@ -2,6 +2,8 @@ from torchvision.models.squeezenet import SqueezeNet, Fire
 from torch import nn
 import torch.utils.model_zoo as model_zoo
 
+__all__ = ['TransparentSqueezeNet']
+
 # This is where we download the pretrained models from
 # NOTE models are trained on ImageNet
 model_urls = {
