@@ -16,7 +16,7 @@ IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 
 def to_readable(net_out, imagenet):
     # Highest value corresponds to prediction
-    labels_pred_numeric = output_opaque.argmax(dim=1)
+    labels_pred_numeric = net_out.argmax(dim=1)
     # Grab classes from ImageNet
     labels_pred = [imagenet.classes[n] for n in labels_pred_numeric]
     return labels_pred
