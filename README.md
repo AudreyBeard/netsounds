@@ -2,10 +2,17 @@
 Sonification of convolutional neural networks
 
 ## Functionality
+### Model
 Currently, we've got a modified pretrained SqueezeNet v1.0 running some home
 images, and dumping the activations at certain layers out as numpy pickles.
 
 To do this, run `python3 test_squeezenet.py` from `/src/models/`
+
+### Sound
+`activation_ifft.py` has a function that writes an activation to a sound. It's
+pretty rad. Right now it wrote out the audio for the first activation from a
+1024 px image of `mixing_bowl.jpg`
+
 
 ## TODO
 - [ ] Dump images in `test_squeezenet.py`
