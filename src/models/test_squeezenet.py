@@ -9,18 +9,9 @@ import ipdb  # NOQA
 
 from squeezenet import TransparentSqueezeNet
 
-save = True
-parser = argparse.ArgumentParser()
-parser.add_argument('--save',
-                    dest='save_activations',
-                    nargs='?',
-                    default=False,
-                    help='Use this flag if you want to save the activations as pickles')
-parser.add_argument('--save_images',
-                    dest='save_images',
-                    nargs='?',
-                    default=False,
-                    help='Use this flag if you want to save the activations as images')
+
+IMAGES_DPATH = '../test/images'
+IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 
 
 def to_readable(net_out, imagenet):
@@ -42,36 +33,102 @@ def print_act_predict(labels_act, labels_pred):
         print("{:5d} | {}{} | {}".format(i, labels_act[i], n_spaces * " ", labels_pred[i]))
 
 
+def get_image_paths(dpath=IMAGES_DPATH):
+    dpath = os.path.realpath(dpath)
+    images_fpaths = [os.path.join(dpath, filename)
+                     for filename in os.listdir(dpath)]
+    return images_fpaths
+
+
+def parse_labels_from_paths(image_paths):
+    labels = [' '.join((os.path.splitext(os.path.split(fp)[-1])[0]).split('_'))
+              for fp in image_paths]
+    return labels
+
+
+def init_image_transforms(size=256):
+    if size > 0:
+        transform = transforms.Compose([
+            transforms.Resize(size),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.transpose(1, 2)
+                              if x.shape[1] > x.shape[2] else x),
+            transforms.Lambda(lambda x: x.unsqueeze(0)),
+        ])
+    else:
+        transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.transpose(1, 2)
+                              if x.shape[1] > x.shape[2] else x),
+            transforms.Lambda(lambda x: x.unsqueeze(0)),
+        ])
+    return transform
+
+
+def read_images_as_tensors(image_paths, transform):
+    imgs = torch.cat([transform(Image.open(filename))
+                      for filename in images_fpaths])
+    return imgs
+
+
+def save_activations(activations, labels_act,
+                     as_pickle=False, as_image=False, dpath=IMAGES_DPATH):
+
+    # Drop them in a sibling directory to test images
+    save_dpath = os.path.join(os.path.split(dpath)[0], 'activations')
+    labels_save = ["-".join(l.split()) for l in labels_act]
+
+    if as_pickle:
+
+        # Convert activations to numpy arrays for saving as pickles
+        activations_np = [a.detach().numpy() for a in activations]
+        print('Saving activations as pickles to {}'.format(save_dpath))
+
+        for i in range(len(activations_np)):
+            for j in range(len(labels_act)):
+                a = activations_np[i][j, ...]
+                save_name = os.path.join(save_dpath,
+                                         "activations-{}_{}.pkl".format(i + 1, labels_save[j]))
+                a.dump(save_name)
+
+    if as_image:
+        print('Saving activations as images to {}'.format(save_dpath))
+        to_img = transforms.ToPILImage()
+        for i in range(len(activations)):
+            for j in range(len(labels_act)):
+                img = to_img(activations[i][j, ...])
+                save_name = os.path.join(save_dpath,
+                                         "activations-{}_{}.png".format(i + 1, labels_save[j]))
+                img.save(save_name)
+
+
 if __name__ == "__main__":
-    args = parser.parse_args()
+    import ubelt as ub
+    #args = parser.parse_args()
+    save_activation_pickles = ub.argflag('--save')
+    save_activation_images = ub.argflag('--save_imgs')
+    image_size = int(ub.argval('image_size', default=256))
+    image_name = ub.argval('image_name', default=None)
 
     # Location of test images
-    images_dpath = os.path.realpath('../test/images')
-    images_fpaths = [os.path.join(images_dpath, filename)
-                     for filename in os.listdir(images_dpath)]
+    images_fpaths = get_image_paths()
+    if image_name is not None:
+        idx = [i for i in range(len(images_fpaths)) if image_name in images_fpaths[i]][0]
+        images_fpaths = [images_fpaths[idx]]
 
     # Get the actual labels from the filenames
-    labels_act = [' '.join((os.path.splitext(os.path.split(fp)[-1])[0]).split('_'))
-                  for fp in images_fpaths]
+    labels_act = parse_labels_from_paths(images_fpaths)
 
     # Get ImageNet dataset for interpreting the outputs of the network
-    imagenet_location = os.path.expandvars('$HOME/data')
-    imagenet = ImageNet(imagenet_location,
+    imagenet = ImageNet(IMAGENET_LOCATION,
                         split='val',
                         download=True)
 
     # For each input image, transform to be same size and orientation
-    transform = transforms.Compose([
-        transforms.Resize(256),
-        transforms.ToTensor(),
-        transforms.Lambda(lambda x: x.transpose(1, 2)
-                          if x.shape[1] > x.shape[2] else x),
-        transforms.Lambda(lambda x: x.unsqueeze(0)),
-    ])
+    transform = init_image_transforms(image_size)
 
     # Put all images into a big tensor for putting into model
-    imgs = torch.cat([transform(Image.open(filename))
-                      for filename in images_fpaths])
+    imgs = read_images_as_tensors(images_fpaths, transform)
 
     # Instantiate model
     model = TransparentSqueezeNet(pretrained=True)
@@ -83,7 +140,8 @@ if __name__ == "__main__":
     labels_pred = to_readable(output_opaque, imagenet)
 
     #with ipdb.launch_ipdb_on_exception():
-    transparent_out = model.forward_transparent(imgs)
+    with torch.no_grad():
+        transparent_out = model.forward_transparent(imgs)
 
     # Hardcoded based on output of forward_transparent()
     activations = [transparent_out[i] for i in range(4)]
@@ -99,31 +157,6 @@ if __name__ == "__main__":
     print_act_predict(labels_act, labels_pred_trans)
 
     # Save the activations as pickles of numpy arrays
-    if args.save_activations:
-        save_dpath = os.path.join(os.path.split(images_dpath)[0], 'activations')
-        activations = [a.detach().numpy() for a in activations]
-        for i in range(len(activations)):
-            for j in range(len(labels_act)):
-                label_save = "-".join(labels_act[j].split())
-                a = activations[i][j, ...]
-                save_name = os.path.join(save_dpath,
-                                         "activations-{}_{}.pkl".format(i + 1, label_save))
-                a.dump(save_name)
-
-    if args.save_images:
-        raise NotImplementedError("this is a wip")
-        # TODO wip
-        save_dpath = os.path.join(os.path.split(images_dpath)[0], 'activations')
-        to_img = transforms.ToPILImage()
-        for i in range(len(activations)):
-            for j in range(len(labels_act)):
-                # Since the activations are N x F x cH x cW, we want either:
-                # N, F, NxF images saved for each activation level. I need to
-                # figure out the logic here, and save them for Ezra to get some
-                # insight about
-                activations = [to_img(a.detach()) for a in activations]
-                label_save = "-".join(labels_act[j].split())
-                a = activations[i][j, ...]
-                save_name = os.path.join(save_dpath,
-                                         "activations-{}_{}.pkl".format(i + 1, label_save))
-                a.dump(save_name)
+    save_activations(activations, labels_act,
+                     as_pickle=save_activation_pickles,
+                     as_image=save_activation_images)
