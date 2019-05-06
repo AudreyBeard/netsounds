@@ -15,6 +15,28 @@ IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 SAMPLING_RATE = 44100
 
 
+def spectrogram_to_signal(spect):
+
+    # Iverse FFT, treating columns as time quanta as opposed to frequency components
+    inv = np.fft.ifft(spect, axis=0).real
+
+    # Scale and shift to [-1, 1]
+    inv = inv - inv.min()
+    inv = inv / inv.max()
+    inv = 2 * inv - 1
+
+    # Flatten matrix, treating rows as consecutive samples
+    return inv.T.ravel()
+
+
+def activations_to_signal(activations):
+    """ Takes a (D x H x W) activation array and turns it into a signal
+    """
+    signal = np.concatenate([spectrogram_to_signal(activations[i, :, :])
+                             for i in range(activations.shape[0])])
+    return signal
+
+
 def playground(activations):
     from scipy.io.wavfile import write
     activation_depth = 0
