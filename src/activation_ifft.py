@@ -12,13 +12,19 @@ from models.squeezenet import TransparentSqueezeNet
 
 IMAGES_DPATH = 'test/images'
 IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
+SAMPLING_RATE = 44100
 
 
 def playground(activations):
     from scipy.io.wavfile import write
+    activation_depth = 0
+    activation_number = 0
+
+    save_name = 'activation-{}-{}.wav'
+    save_path = os.path.join(IMAGES_DPATH, 'sounds', save_name)
 
     # Grab the first activation and treat it as a spectrogram
-    spectrogram = activations[0][0, 0, ...].numpy()
+    spectrogram = activations[activation_depth][0, activation_number, ...].numpy()
     inversed = np.fft.ifft(spectrogram, axis=0).real
     inversed = inversed - inversed.min()
     inversed = inversed / inversed.max()
@@ -26,8 +32,8 @@ def playground(activations):
     inversed = inversed.T
     signal = inversed.ravel()
 
-    signal = np.int16(signal * 32767)
-    write('test.wav', 44100, signal)
+    #signal = np.int16(signal * 32767)
+    write(save_path, SAMPLING_RATE, signal)
 
 
 def get_image_paths(dpath=IMAGES_DPATH):
