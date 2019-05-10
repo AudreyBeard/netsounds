@@ -177,4 +177,6 @@ def activations_to_audio(activations, combination_method='sum'):
 
 def save_as_wav(signal, save_name, sampling_rate=44100):
     from scipy.io.wavfile import write
+    if not save_name.endswith('.wav'):
+        save_name += '.wav'
     write(save_name, sampling_rate, signal)
