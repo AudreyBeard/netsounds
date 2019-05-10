@@ -3,3 +3,4 @@
 *.swo
 *.vim
 src/test/activations/big_files
+*graph_.png
