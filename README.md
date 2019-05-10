@@ -9,7 +9,7 @@ images, and dumping the activations at certain layers out as numpy pickles.
 To do this, run `python3 test_squeezenet.py` from `/src/models/`
 
 ### Sound
-`activation_ifft.py` has a function that writes an activation to a sound. It's
+`utils.py` has a function that writes an activation to a sound. It's
 pretty rad. Right now it wrote out the audio for the first activation from a
 1024 px image of `mixing_bowl.jpg`
 
@@ -17,6 +17,9 @@ pretty rad. Right now it wrote out the audio for the first activation from a
 ## TODO
 - [ ] Dump images in `test_squeezenet.py`
 - [ ] Explore the activations at different layers
+    - Made sounds for each activation using two generation schemes:
+        - Concatenating each filter at a level
+        - Summing all filters at a level
 
 ## Notes
 - activations in this repo are generated from images with small edge length of

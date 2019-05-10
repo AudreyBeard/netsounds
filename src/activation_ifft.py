@@ -1,12 +1,12 @@
 import os
 
 import torch
-import numpy as np
 import ipdb  # NOQA
 from PIL import Image
 from torchvision import transforms
 from torchvision.datasets import ImageNet
 
+import utils
 from models.squeezenet import TransparentSqueezeNet
 
 
@@ -15,30 +15,7 @@ IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 SAMPLING_RATE = 44100
 
 
-def spectrogram_to_signal(spect):
-
-    # Iverse FFT, treating columns as time quanta as opposed to frequency components
-    inv = np.fft.ifft(spect, axis=0).real
-
-    # Scale and shift to [-1, 1]
-    inv = inv - inv.min()
-    inv = inv / inv.max()
-    inv = 2 * inv - 1
-
-    # Flatten matrix, treating rows as consecutive samples
-    return inv.T.ravel()
-
-
-def activations_to_signal(activations):
-    """ Takes a (D x H x W) activation array and turns it into a signal
-    """
-    signal = np.concatenate([spectrogram_to_signal(activations[i, :, :])
-                             for i in range(activations.shape[0])])
-    return signal
-
-
 def playground(activations):
-    from scipy.io.wavfile import write
     activation_depth = 0
     activation_number = 0
 
@@ -46,16 +23,10 @@ def playground(activations):
     save_path = os.path.join(IMAGES_DPATH, 'sounds', save_name)
 
     # Grab the first activation and treat it as a spectrogram
-    spectrogram = activations[activation_depth][0, activation_number, ...].numpy()
-    inversed = np.fft.ifft(spectrogram, axis=0).real
-    inversed = inversed - inversed.min()
-    inversed = inversed / inversed.max()
-    inversed = 2 * inversed - 1
-    inversed = inversed.T
-    signal = inversed.ravel()
+    spectrogram = activations[activation_depth][0, activation_number, ...].numpy()  # NOQA
+    signal = utils.spectrogram_to_signal(spectrogram)
 
-    #signal = np.int16(signal * 32767)
-    write(save_path, SAMPLING_RATE, signal)
+    utils.save_as_wav(signal, save_path, sampling_rate=SAMPLING_RATE)
 
 
 def get_image_paths(dpath=IMAGES_DPATH):
@@ -116,7 +87,8 @@ if __name__ == "__main__":
     # Location of test images
     images_fpaths = get_image_paths()
     if image_name is not None:
-        idx = [i for i in range(len(images_fpaths)) if image_name in images_fpaths[i]][0]
+        idx = [i for i in range(len(images_fpaths))
+               if image_name in images_fpaths[i]][0]
         images_fpaths = [images_fpaths[idx]]
 
     # Get the actual labels from the filenames
@@ -145,5 +117,6 @@ if __name__ == "__main__":
     # Predicted label
     labels_pred_trans = to_readable(output_transparent, imagenet)
 
-    import IPython
-    IPython.embed()
+    if ub.argflag('--test'):
+        import IPython
+        IPython.embed()

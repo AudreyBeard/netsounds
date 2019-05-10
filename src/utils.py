@@ -1,17 +1,11 @@
 import os
 
-import torch
 import numpy as np
-from torchvision import transforms
-from torchvision.datasets import ImageNet
 from PIL import Image
 
 IMAGES_DPATH = '../test/images'
 IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 
-imagenet = ImageNet(IMAGENET_LOCATION,
-                    split='val',
-                    download=True)
 
 __all__ = [
     'output_to_readable',
@@ -19,9 +13,18 @@ __all__ = [
     'init_image_transforms',
     'read_images_as_tensors',
     'save_activations',
-    'activations_to_signal',
+    'activations_to_audio',
     'spectrogram_to_signal',
+    'save_as_wav',
 ]
+
+
+def init_imagenet(dpath=IMAGENET_LOCATION):
+    from torchvision.datasets import ImageNet
+    imagenet = ImageNet(IMAGENET_LOCATION,
+                        split='val',
+                        download=True)
+    return imagenet
 
 
 def output_to_readable(net_out, imagenet):
@@ -46,6 +49,7 @@ def print_act_pred_labels(labels_act, labels_pred):
 
 
 def init_image_transforms(size=256):
+    from torchvision import transforms
     if size > 0:
         transform = transforms.Compose([
             transforms.Resize(size),
@@ -65,8 +69,9 @@ def init_image_transforms(size=256):
 
 
 def read_images_as_tensors(image_paths, transform):
-    imgs = torch.cat([transform(Image.open(filename))
-                      for filename in image_paths])
+    from torch import cat
+    imgs = cat([transform(Image.open(filename))
+                for filename in image_paths])
     return imgs
 
 
@@ -101,6 +106,10 @@ def save_activations(activations, labels_act,
                 img.save(save_name)
 
 
+def load_activations(fpath):
+    return np.load(fpath)
+
+
 def spectrogram_to_signal(spect):
     """ Treating a 2D matrix as a spectrogram, reconstructs the signal
     """
@@ -115,7 +124,7 @@ def spectrogram_to_signal(spect):
     return inv.T.ravel()
 
 
-def activations_to_signal(activations, combination_method='sum'):
+def activations_to_audio(activations, combination_method='sum'):
     """ Takes a (D x H x W) activation array and turns it into a signal
         Parameters:
             - activations (np.ndarray): This 3D array is the numpy version of
@@ -128,13 +137,44 @@ def activations_to_signal(activations, combination_method='sum'):
             - (np.ndarray): shape (L,) where L == HxW if combination_method ==
               'sum' and L == DxHxW if not.
     """
-    signal = np.concatenate([spectrogram_to_signal(activations[i, :, :])
-                             for i in range(activations.shape[0])])
+    # signal = np.concatenate([spectrogram_to_signal(activations[i, :, :])
+    #                          for i in range(activations.shape[0])])
+    # This is probably faster
+    signal = np.fft.ifft(activations, axis=-2).real
+    signal = signal.transpose(0, 2, 1).reshape(signal.shape[0], -1)
+
+    # Standardize now for a few reasons:
+    # 1. This weights each filter equally, as opposed to high-activation
+    #    filters overpowering low-activation filters
+    # 2. This makes for a smoother signal (due to 1) and is therefore less
+    #    harsh
+    # 3. Simpler code
+
+    sigmax = signal.max(axis=1)[:, None]
+    sigmin = signal.min(axis=1)[:, None]
+    # This prevents divide-by-zero errors, which may pop up when an entire
+    # filter fails to activate
+    div = np.where(sigmax - sigmin, sigmax - sigmin, 1)
+    signal = 2 * (signal - sigmin) / div - 1
 
     if combination_method == 'sum':
-        # Sum individuals, scale, and shift
-        signal = signal.reshape(activations.shape[0], -1).sum(axis=0)
-        signal = (signal - signal.min()) / (signal.max() - signal.min())
-        signal = signal * 2 - 1
+        # Sum filters
+        signal = signal.sum(axis=0)
+
+        sigmax = signal.max()
+        sigmin = signal.min()
+        # This prevents divide-by-zero errors, which may pop up when an entire
+        # filter fails to activate
+        div = np.where(sigmax - sigmin, sigmax - sigmin, 1)
+        signal = 2 * (signal - sigmin) / div - 1
+
+    else:
+        # Concatenate filters
+        signal = signal.ravel()
 
     return signal
+
+
+def save_as_wav(signal, save_name, sampling_rate=44100):
+    from scipy.io.wavfile import write
+    write(save_name, sampling_rate, signal)
