@@ -20,6 +20,10 @@ pretty rad. Right now it wrote out the audio for the first activation from a
     - Made sounds for each activation using two generation schemes:
         - Concatenating each filter at a level
         - Summing all filters at a level
+- [ ] Put as much of this on a GPU as possible:
+  - Use PyTorch as much as possible
+  - Make sure we can still use CPU (in case of use on Pi, for instance)
+
 
 ## Notes
 - activations in this repo are generated from images with small edge length of
