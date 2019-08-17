@@ -7,7 +7,6 @@ from plottingtools import plot
 import utils
 
 # TODO:
-# [x] remove reliance on ubelt
 # [ ] shift reliance from numpy towards torch for speed
 
 
