@@ -22,12 +22,13 @@ class TransparentSqueezeNet(SqueezeNet):
         on this.
     """
     def __init__(self, version=1.0, num_classes=1000, pretrained=False):
-        if version == 1.0:
-            v_str = '1_0'
-        else:
+        if version != 1.0:
             raise NotImplementedError("No support for version 1.1 yet")
 
-        super().__init__(version=v_str, num_classes=num_classes)
+        super().__init__(
+            version='_'.join("{:.1f}".format(version).split('.')),
+            num_classes=num_classes
+        )
         self.version = version
 
         # Here we copy the architecture of SqueezeNet, but break it apart to see
@@ -55,8 +56,6 @@ class TransparentSqueezeNet(SqueezeNet):
                 nn.MaxPool2d(kernel_size=3, stride=2, ceil_mode=True),
                 Fire(512, 64, 256, 256),  # 12 - 1
             )
-        else:
-            raise NotImplementedError("No support for version 1.1 yet")
 
         if pretrained:
             self.load_state_dict(model_zoo.load_url(model_urls[version]))
