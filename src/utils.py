@@ -107,7 +107,7 @@ def save_activations(activations, labels_act,
 
 
 def load_activations(fpath):
-    return np.load(fpath)
+    return np.load(fpath, allow_pickle=True)
 
 
 def spectrogram_to_signal(spect):

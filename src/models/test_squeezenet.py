@@ -127,6 +127,8 @@ def parse_args():
         default=None,
         help='image name'
     )
+    args = parser.parse_args()
+    return args
 
 
 if __name__ == "__main__":
