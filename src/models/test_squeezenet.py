@@ -102,18 +102,40 @@ def save_activations(activations, labels_act,
                 img.save(save_name)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--pickles',
+        action='store_true',
+        default=False,
+        help='whether to save activations as pickles'
+    )
+    parser.add_argument(
+        '--images',
+        action='store_true',
+        default=False,
+        help='whether to save activations as images'
+    )
+    parser.add_argument(
+        '--image_size',
+        type=int,
+        default=256,
+        help='image size (small edge)'
+    )
+    parser.add_argument(
+        '--image_name',
+        default=None,
+        help='image name'
+    )
+
+
 if __name__ == "__main__":
-    import ubelt as ub
-    #args = parser.parse_args()
-    save_activation_pickles = ub.argflag('--save')
-    save_activation_images = ub.argflag('--save_imgs')
-    image_size = int(ub.argval('image_size', default=256))
-    image_name = ub.argval('image_name', default=None)
+    args = parse_args()
 
     # Location of test images
     images_fpaths = get_image_paths()
-    if image_name is not None:
-        idx = [i for i in range(len(images_fpaths)) if image_name in images_fpaths[i]][0]
+    if args.image_name is not None:
+        idx = [i for i in range(len(images_fpaths)) if args.image_name in images_fpaths[i]][0]
         images_fpaths = [images_fpaths[idx]]
 
     # Get the actual labels from the filenames
@@ -125,7 +147,7 @@ if __name__ == "__main__":
                         download=True)
 
     # For each input image, transform to be same size and orientation
-    transform = init_image_transforms(image_size)
+    transform = init_image_transforms(args.image_size)
 
     # Put all images into a big tensor for putting into model
     imgs = read_images_as_tensors(images_fpaths, transform)
@@ -158,5 +180,5 @@ if __name__ == "__main__":
 
     # Save the activations as pickles of numpy arrays
     save_activations(activations, labels_act,
-                     as_pickle=save_activation_pickles,
-                     as_image=save_activation_images)
+                     as_pickle=args.pickles,
+                     as_image=args.images)
