@@ -124,7 +124,7 @@ def parse_args():
     )
     parser.add_argument(
         '--image_name',
-        default=None,
+        default='wine_bottle',
         help='image name'
     )
     args = parser.parse_args()
