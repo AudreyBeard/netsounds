@@ -48,8 +48,7 @@ def parse_args():
         default=False,
         help='whether to save signal',
     )
-    parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 args = parse_args()
