@@ -1,6 +1,11 @@
 # netsounds
 Sonification of convolutional neural networks
 
+## TODO
+- [ ] `torch.ifft()` instead of `np.fft.ifft()`
+  - This will make the process faster, since we're not switching between
+    `torch.tensor`s and `np.ndarray`s
+
 ## Functionality
 ### Model
 Currently, we've got a modified pretrained SqueezeNet v1.0 running some home

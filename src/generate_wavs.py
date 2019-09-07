@@ -1,3 +1,6 @@
+# As of 2019-09-07, this file is a duplication of functionality in utils -
+# namely utils.save_wavs()
+raise UserWarning("generate_wavs.py is deprecated - use utils.save_wavs() instead")
 import os
 
 import utils

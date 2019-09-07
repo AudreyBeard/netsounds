@@ -6,19 +6,25 @@ import numpy as np
 from PIL import Image
 
 IMAGES_DPATH = '../test/images'
+SOUNDS_DPATH = '../test/sounds'
+ACTIVATIONS_DPATH = '../test/activations'
 IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
+DEFAULT_SAMPLING_RATE = 44100 // 4
 
 
-__all__ = [
-    'output_to_readable',
-    'print_act_pred_labels',
-    'init_image_transforms',
-    'read_images_as_tensors',
-    'save_activations',
-    'activations_to_audio',
-    'spectrogram_to_signal',
-    'save_as_wav',
-]
+def save_wavs(activations_list, labels, dpath=SOUNDS_DPATH,
+              combination_method='concat',
+              sampling_rate=DEFAULT_SAMPLING_RATE):
+    """ Saves activations as .wav files
+    """
+    assert combination_method.lower() in ['concat', 'sum']
+    for i, activations in enumerate(activations_list):
+        signal = activations_to_audio(activations, combination_method)
+
+        save_name = os.path.join(dpath,
+                                 '{}_{}.wav'.format(labels[i], combination_method))
+        save_as_wav(signal, save_name, sampling_rate)
+    return
 
 
 def get_images_from_name_fragment(name_fragment=None):
@@ -206,7 +212,7 @@ def spectrogram_to_signal(spect):
     return inv.T.ravel()
 
 
-def activations_to_audio(activations, combination_method='sum'):
+def activations_to_audio(activations, combination_method='concat'):
     """ Takes a (D x H x W) activation array and turns it into a signal
         Parameters:
             - activations (np.ndarray): This 3D array is the numpy version of
@@ -222,37 +228,38 @@ def activations_to_audio(activations, combination_method='sum'):
     # signal = np.concatenate([spectrogram_to_signal(activations[i, :, :])
     #                          for i in range(activations.shape[0])])
     # This is probably faster
-    signal = np.fft.ifft(activations, axis=-2).real
-    signal = signal.transpose(0, 2, 1).reshape(signal.shape[0], -1)
+    if isinstance(activations, np.ndarray):
+        signal = np.fft.ifft(activations, axis=-2).real
+        signal = signal.transpose(0, 2, 1).reshape(signal.shape[0], -1)
 
-    # Standardize now for a few reasons:
-    # 1. This weights each filter equally, as opposed to high-activation
-    #    filters overpowering low-activation filters
-    # 2. This makes for a smoother signal (due to 1) and is therefore less
-    #    harsh
-    # 3. Simpler code
+        # Standardize now for a few reasons:
+        # 1. This weights each filter equally, as opposed to high-activation
+        #    filters overpowering low-activation filters
+        # 2. This makes for a smoother signal (due to 1) and is therefore less
+        #    harsh
+        # 3. Simpler code
 
-    sigmax = signal.max(axis=1)[:, None]
-    sigmin = signal.min(axis=1)[:, None]
-    # This prevents divide-by-zero errors, which may pop up when an entire
-    # filter fails to activate
-    div = np.where(sigmax - sigmin, sigmax - sigmin, 1)
-    signal = 2 * (signal - sigmin) / div - 1
-
-    if combination_method == 'sum':
-        # Sum filters
-        signal = signal.sum(axis=0)
-
-        sigmax = signal.max()
-        sigmin = signal.min()
+        sigmax = signal.max(axis=1)[:, None]
+        sigmin = signal.min(axis=1)[:, None]
         # This prevents divide-by-zero errors, which may pop up when an entire
         # filter fails to activate
         div = np.where(sigmax - sigmin, sigmax - sigmin, 1)
         signal = 2 * (signal - sigmin) / div - 1
 
-    else:
-        # Concatenate filters
-        signal = signal.ravel()
+        if combination_method == 'sum':
+            # Sum filters
+            signal = signal.sum(axis=0)
+
+            sigmax = signal.max()
+            sigmin = signal.min()
+            # This prevents divide-by-zero errors, which may pop up when an entire
+            # filter fails to activate
+            div = np.where(sigmax - sigmin, sigmax - sigmin, 1)
+            signal = 2 * (signal - sigmin) / div - 1
+
+        else:
+            # Concatenate filters
+            signal = signal.ravel()
 
     return signal
 
@@ -260,5 +267,7 @@ def activations_to_audio(activations, combination_method='sum'):
 def save_as_wav(signal, save_name, sampling_rate=44100):
     from scipy.io.wavfile import write
     if not save_name.endswith('.wav'):
+        raise UserWarning("You should always specify the extension name when "
+                          "calling utils.save_as_wav()!")
         save_name += '.wav'
     write(save_name, sampling_rate, signal)
