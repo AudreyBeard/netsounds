@@ -5,9 +5,9 @@ from torchvision import transforms
 import numpy as np
 from PIL import Image
 
-IMAGES_DPATH = '../test/images'
-SOUNDS_DPATH = '../test/sounds'
-ACTIVATIONS_DPATH = '../test/activations'
+IMAGES_DPATH = './test/images'
+SOUNDS_DPATH = './test/sounds'
+ACTIVATIONS_DPATH = './test/activations'
 IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 DEFAULT_SAMPLING_RATE = 44100 // 4
 
@@ -27,9 +27,11 @@ def save_wavs(activations_list, labels, dpath=SOUNDS_DPATH,
     return
 
 
-def get_images_from_name_fragment(name_fragment=None):
+def get_images_from_name_fragment(name_fragment=None, dpath=None):
     # Location of test images
-    images_fpaths = get_image_paths()
+    if dpath is None:
+        dpath = IMAGES_DPATH
+    images_fpaths = get_image_paths(dpath)
     if name_fragment is not None:
         idx = [
             i
@@ -67,7 +69,12 @@ def output_to_readable(net_out, imagenet=None):
     # Highest value corresponds to prediction
     labels_pred_numeric = net_out.argmax(dim=1)
     # Grab classes from ImageNet
-    labels_pred = [imagenet.classes[n] for n in labels_pred_numeric]
+    labels_pred = [
+        imagenet.classes[n][0]
+        if isinstance(imagenet.classes[n], tuple)
+        else imagenet.classes[n]
+        for n in labels_pred_numeric
+    ]
     return labels_pred
 
 
@@ -112,8 +119,11 @@ def read_images_as_tensors(image_paths, transform):
     """ Read in images as tensors
     """
     from torch import cat
-    imgs = cat([transform(Image.open(filename))
-                for filename in image_paths])
+    if isinstance(image_paths, list):
+        imgs = cat([transform(Image.open(filename))
+                    for filename in image_paths])
+    else:
+        imgs = transform(Image.open(image_paths))
     return imgs
 
 
@@ -128,7 +138,7 @@ def cache_activations(activations, labels, dpath=None):
     # Replace spaces with hypens
     labels_nospace = ["-".join(l.split()) for l in labels]
 
-    for i in range(activations.shape[0]):
+    for i in range(len(activations)):
         for j in range(len(labels_nospace)):
             save_name = os.path.join(
                 dpath,
@@ -137,7 +147,7 @@ def cache_activations(activations, labels, dpath=None):
                     labels_nospace[j]
                 )
             )
-            torch.save(activations[i, j, :], save_name)
+            torch.save(activations[i][j, ...], save_name)
     return
 
 
@@ -149,9 +159,9 @@ def image_activations(activations, labels, dpath=None):
     # Replace spaces with hypens
     labels_nospace = ["-".join(l.split()) for l in labels]
     to_img = transforms.ToPILImage()
-    for i in range(activations.shape[0]):
+    for i in range(len(activations)):
         for j in range(len(labels_nospace)):
-            img = to_img(activations[i, j, :])
+            img = to_img(activations[i][j, ...])
             save_name = os.path.join(
                 dpath,
                 "activations-{}_{}.png".format(
@@ -260,6 +270,61 @@ def activations_to_audio(activations, combination_method='concat'):
         else:
             # Concatenate filters
             signal = signal.ravel()
+    else:
+        # B x F x H x W
+        # H > W
+        orig_shape = activations.shape
+        batch_size, n_filters, height, width = orig_shape
+
+        # Reshape with view so I can do 1D IFFT (treating filters like spectrograms)
+        # Stack with zeros because torch.ifft() expects two channels: real and complex
+        activations = torch.stack(
+            (
+                activations.view(-1, activations.shape[-1]),
+                torch.zeros(batch_size * n_filters * height, width)
+            ), 2)
+
+        # IFFT on each "time step" in each filter's activation "spectrogram"
+        # Stack them all back together and toss out the complex component
+        signal = torch.stack([
+            torch.ifft(a, 1)
+            for a in activations
+        ])[..., 0]
+
+        # TODO I don't do any divide-by-zero checking here - I need to do that
+        if combination_method == 'sum':
+            # Sum all activation-derived signals for each batch item
+            signal = signal.view(batch_size, n_filters, -1).sum(dim=1)
+
+        elif combination_method == 'concat':
+            # Concatenate all activation-derived signals components for each batch
+            signal = signal.view(batch_size, -1)
+
+        elif combination_method == 'none':
+            # Don't combine activation-derived signals at all
+            signal = signal.view(batch_size, n_filters, -1)
+
+        else:
+            raise ValueError('combination_method {} not '
+                             'recognized!'.format(combination_method))
+
+        # By doing this [0, 1] standardization here, we force weak signals to
+        # be drowned out by the stronger signals in the activations. This does
+        # a few things:
+        # 1. If combination_method == 'sum', we likely get a spikier signal
+        #    (assuming that signals derived from activations are somewhat
+        #    independent of each other)
+        # 2. If combination_method == 'concat', we likely get "dead spots" in
+        #    the signal, corresponding to filters that have a low activation.
+        #    This produces a less coherent signal, but one that arguably
+        #    conveys more information about the system than the alternative
+        # 3. If combination_method == 'none': a similar result as above, where
+        #    some of the activation-derived signals are miniscule. Again, this
+        #    means that signals will be less uniform, but that converys
+        #    information about the system
+        sigmax = signal.max(1)[0]
+        sigmin = signal.min(1)[0]
+        signal = (signal - sigmin) / (sigmax - sigmin)
 
     return signal
 
