@@ -12,19 +12,32 @@ IMAGENET_LOCATION = os.path.expandvars('$HOME/data')
 DEFAULT_SAMPLING_RATE = 44100 // 4
 
 
-def save_wavs(activations_list, labels, dpath=SOUNDS_DPATH,
+def save_wavs(activations_list, label, dpath=SOUNDS_DPATH,
               combination_method='concat',
               sampling_rate=DEFAULT_SAMPLING_RATE):
     """ Saves activations as .wav files
     """
+    # Replace spaces with hypens
+    label = '-'.join(label.split())
     assert combination_method.lower() in ['concat', 'sum']
+
+    save_names = []
     for i, activations in enumerate(activations_list):
         signal = activations_to_audio(activations, combination_method)
+        if not isinstance(signal, np.ndarray):
+            signal = signal.numpy()
 
-        save_name = os.path.join(dpath,
-                                 '{}_{}.wav'.format(labels[i], combination_method))
+        save_name = os.path.join(
+            dpath,
+            "activations-{}_{}_{}Hz.wav".format(
+                i + 1,
+                label,
+                sampling_rate
+            )
+        )
         save_as_wav(signal, save_name, sampling_rate)
-    return
+        save_names.append(save_name)
+    return save_names
 
 
 def get_images_from_name_fragment(name_fragment=None, dpath=None):
@@ -102,14 +115,14 @@ def init_image_transforms(size=256):
             transforms.Resize(size),
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.transpose(1, 2)
-                              if x.shape[1] > x.shape[2] else x),
+                              if x.shape[1] < x.shape[2] else x),
             transforms.Lambda(lambda x: x.unsqueeze(0)),
         ])
     else:
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Lambda(lambda x: x.transpose(1, 2)
-                              if x.shape[1] > x.shape[2] else x),
+                              if x.shape[1] < x.shape[2] else x),
             transforms.Lambda(lambda x: x.unsqueeze(0)),
         ])
     return transform
@@ -138,6 +151,8 @@ def cache_activations(activations, labels, dpath=None):
     # Replace spaces with hypens
     labels_nospace = ["-".join(l.split()) for l in labels]
 
+    save_names = []
+
     for i in range(len(activations)):
         for j in range(len(labels_nospace)):
             save_name = os.path.join(
@@ -148,7 +163,8 @@ def cache_activations(activations, labels, dpath=None):
                 )
             )
             torch.save(activations[i][j, ...], save_name)
-    return
+            save_names.append(save_name)
+    return save_names
 
 
 def image_activations(activations, labels, dpath=None):
@@ -324,7 +340,7 @@ def activations_to_audio(activations, combination_method='concat'):
         #    information about the system
         sigmax = signal.max(1)[0]
         sigmin = signal.min(1)[0]
-        signal = (signal - sigmin) / (sigmax - sigmin)
+        signal = (2 * (signal - sigmin) / (sigmax - sigmin) - 1).view(-1)
 
     return signal
 
