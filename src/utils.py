@@ -1,5 +1,7 @@
 import os
 
+import torch
+from torchvision import transforms
 import numpy as np
 from PIL import Image
 
@@ -19,7 +21,30 @@ __all__ = [
 ]
 
 
+def get_images_from_name_fragment(name_fragment=None):
+    # Location of test images
+    images_fpaths = get_image_paths()
+    if name_fragment is not None:
+        idx = [
+            i
+            for i in range(len(images_fpaths))
+            if name_fragment in images_fpaths[i]
+        ]
+        images_fpaths = [images_fpaths[i] for i in idx]
+    return images_fpaths
+
+
+def get_image_paths(dpath=IMAGES_DPATH):
+    dpath = os.path.realpath(dpath)
+    images_fpaths = [os.path.join(dpath, filename)
+                     for filename in os.listdir(dpath)]
+    return images_fpaths
+
+
 def init_imagenet(dpath=IMAGENET_LOCATION):
+    """
+        Initializes Imagenet dataset
+    """
     from torchvision.datasets import ImageNet
     imagenet = ImageNet(IMAGENET_LOCATION,
                         split='val',
@@ -27,7 +52,12 @@ def init_imagenet(dpath=IMAGENET_LOCATION):
     return imagenet
 
 
-def output_to_readable(net_out, imagenet):
+def output_to_readable(net_out, imagenet=None):
+    """ Converts network output to plaintext labels
+    """
+    if imagenet is None:
+        imagenet = init_imagenet(IMAGENET_LOCATION)
+
     # Highest value corresponds to prediction
     labels_pred_numeric = net_out.argmax(dim=1)
     # Grab classes from ImageNet
@@ -36,6 +66,8 @@ def output_to_readable(net_out, imagenet):
 
 
 def print_act_pred_labels(labels_act, labels_pred):
+    """ Prints actual and predicted labels nicely
+    """
     max_len = max([len(l) for l in labels_act])
     n_spaces = max_len - len("Actual")
     print("Index | {}{} | {}".format("Actual",
@@ -49,6 +81,8 @@ def print_act_pred_labels(labels_act, labels_pred):
 
 
 def init_image_transforms(size=256):
+    """ Initialize transforms of data
+    """
     from torchvision import transforms
     if size > 0:
         transform = transforms.Compose([
@@ -69,10 +103,58 @@ def init_image_transforms(size=256):
 
 
 def read_images_as_tensors(image_paths, transform):
+    """ Read in images as tensors
+    """
     from torch import cat
     imgs = cat([transform(Image.open(filename))
                 for filename in image_paths])
     return imgs
+
+
+def cache_activations(activations, labels, dpath=None):
+    """ Save activations as torch files (.t7)
+    """
+    # Drop them in a sibling directory to test images
+    if dpath is None:
+        dpath = os.path.join(os.path.split(IMAGES_DPATH)[0],
+                             'activations')
+
+    # Replace spaces with hypens
+    labels_nospace = ["-".join(l.split()) for l in labels]
+
+    for i in range(activations.shape[0]):
+        for j in range(len(labels_nospace)):
+            save_name = os.path.join(
+                dpath,
+                "activations-{}_{}.t7".format(
+                    i + 1,
+                    labels_nospace[j]
+                )
+            )
+            torch.save(activations[i, j, :], save_name)
+    return
+
+
+def image_activations(activations, labels, dpath=None):
+    # Drop them in a sibling directory to test images
+    if dpath is None:
+        dpath = os.path.join(os.path.split(IMAGES_DPATH)[0],
+                             'activations')
+    # Replace spaces with hypens
+    labels_nospace = ["-".join(l.split()) for l in labels]
+    to_img = transforms.ToPILImage()
+    for i in range(activations.shape[0]):
+        for j in range(len(labels_nospace)):
+            img = to_img(activations[i, j, :])
+            save_name = os.path.join(
+                dpath,
+                "activations-{}_{}.png".format(
+                    i + 1,
+                    labels_nospace[j]
+                )
+            )
+            img.save(save_name)
+    return
 
 
 def save_activations(activations, labels_act,
