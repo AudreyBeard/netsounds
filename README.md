@@ -15,6 +15,10 @@ This will:
 4. Save audio signals generated from IFFT of activations, treating them like
    spectrograms
 
+You can use the `--debug` flag to drop into an IPython Debugging (ipdb)
+session, allowing you to step (`s`) through the code in an interactive Python
+shell to get used to what's going on.
+
 
 ## TODO
 - [x] `torch.ifft()` instead of `np.fft.ifft()`
