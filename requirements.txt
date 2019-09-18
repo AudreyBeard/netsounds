@@ -1,0 +1,9 @@
+torch
+torchvision
+argparse
+pillow
+ipdb  # Optional debugger - not necessary for use, though may have to alter source
+plottingtools  # Optional for plotting
+numpy  # TODO I'm trying to get rid of this, we'll see
+
+
